@@ -120,16 +120,26 @@ def load_model(path: str):
     model.model.eval()
     return model
 
-def to_pil(file_bytes: bytes) -> Image.Image:
-    img = Image.open(io.BytesIO(file_bytes))
-    if img.mode != "RGB":
-        img = ImageOps.grayscale(img).convert("RGB")
-    return img
+def to_pil(file_bytes: bytes, filename: str = "image") -> Image.Image:
+    try:
+        img = Image.open(io.BytesIO(file_bytes))
+        if img.mode != "RGB":
+            img = ImageOps.grayscale(img).convert("RGB")
+        img.verify()  # Verify image integrity
+        img = Image.open(io.BytesIO(file_bytes))  # Reopen after verify
+        return img
+    except Exception as e:
+        st.error(f"Failed to process image '{filename}': Invalid or corrupted image file. Please upload a valid image.")
+        raise
 
 def pil_to_tensor(img: Image.Image, imgsz: int) -> torch.Tensor:
-    img = img.resize((imgsz, imgsz))
-    arr = (np.asarray(img).astype(np.float32) / 255.0).transpose(2, 0, 1)
-    return torch.from_numpy(arr).unsqueeze(0)
+    try:
+        img = img.resize((imgsz, imgsz))
+        arr = (np.asarray(img).astype(np.float32) / 255.0).transpose(2, 0, 1)
+        return torch.from_numpy(arr).unsqueeze(0)
+    except Exception as e:
+        st.error(f"Error converting image to tensor: {e}")
+        raise
 
 # -------------------- SIDEBAR --------------------
 with st.sidebar:
@@ -185,41 +195,47 @@ cols = st.columns([1, 1], gap="medium")
 with cols[0]:
     st.subheader("Uploaded Images", anchor=False)
     for f in uploads:
-        st.image(to_pil(f.getvalue()), caption=f.name, use_container_width=True)
+        try:
+            st.image(to_pil(f.getvalue(), f.name), caption=f.name, use_container_width=True)
+        except Exception:
+            continue  # Skip invalid images and proceed with others
 
 with cols[1]:
     st.subheader("Prediction Results", anchor=False)
     with st.spinner("Processing images..."):
         for f in uploads:
-            pil = to_pil(f.getvalue())
-            start = time.time()
-            results = model.predict(source=[np.array(pil)], imgsz=IMGSZ, device=device, verbose=False)
-            elapsed_ms = (time.time() - start) * 1000
+            try:
+                pil = to_pil(f.getvalue(), f.name)
+                start = time.time()
+                results = model.predict(source=[np.array(pil)], imgsz=IMGSZ, device=device, verbose=False)
+                elapsed_ms = (time.time() - start) * 1000
 
-            r = results[0]
-            if r.probs is None:
-                st.error("No probabilities returned; ensure classification weights (yolov8*-cls).")
-                continue
+                r = results[0]
+                if r.probs is None:
+                    st.error(f"No probabilities returned for '{f.name}'; ensure classification weights (yolov8*-cls).")
+                    continue
 
-            probs = r.probs.data.cpu().numpy()
-            idx = np.argsort(-probs)[:topk]
-            names = [class_names[i] for i in idx]
-            scores = [float(probs[i]) for i in idx]
+                probs = r.probs.data.cpu().numpy()
+                idx = np.argsort(-probs)[:topk]
+                names = [class_names[i] for i in idx]
+                scores = [float(probs[i]) for i in idx]
 
-            # Display predictions in a card-like format
-            with st.container(border=True):
-                st.markdown(f"**{f.name}** — Inference time: **{elapsed_ms:.1f} ms**")
-                st.metric(
-                    label="Top Prediction",
-                    value=names[0],
-                    delta=f"{scores[0]*100:.2f}% confidence",
-                    delta_color="normal"
-                )
-                st.dataframe(
-                    {"Class": names, "Confidence": [f"{s*100:.2f}%" for s in scores]},
-                    use_container_width=True,
-                    hide_index=True
-                )
+                # Display predictions in a card-like format
+                with st.container(border=True):
+                    st.markdown(f"**{f.name}** — Inference time: **{elapsed_ms:.1f} ms**")
+                    st.metric(
+                        label="Top Prediction",
+                        value=names[0],
+                        delta=f"{scores[0]*100:.2f}% confidence",
+                        delta_color="normal"
+                    )
+                    st.dataframe(
+                        {"Class": names, "Confidence": [f"{s*100:.2f}%" for s in scores]},
+                        use_container_width=True,
+                        hide_index=True
+                    )
+            except Exception:
+                continue  # Skip failed predictions and proceed with others
 
 st.markdown("---")
 st.caption("Note: This app performs **image-level classification** (e.g., def_front vs ok_front). Keep validation/test sets augmentation-free for fair evaluation.")
