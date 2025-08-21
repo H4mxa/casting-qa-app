@@ -22,6 +22,14 @@ st.markdown("""
     background-color: #f5f7fa;
     font-family: 'Inter', sans-serif;
 }
+
+/* Style the top navbar to match off-white background */
+div[data-testid="stHeader"] {
+    background-color: #f5f7fa !important;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+/* Main content area */
 h1 {
     color: #1a3c34;
     font-weight: 700;
