@@ -19,13 +19,13 @@ st.markdown("""
 <style>
 /* General Styling */
 .stApp {
-    background-color: #1a3c34;
+    background-color: #f5f7fa;
     font-family: 'Inter', sans-serif;
 }
 
 /* Style the top navbar to match off-white background */
 div[data-testid="stHeader"] {
-    background-color: #1a3c34 !important;
+    background-color: #f5f7fa !important;
     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
 }
 
